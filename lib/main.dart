@@ -1,16 +1,19 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'features/auth/data/data_sources/auth_remote_ds.dart';
+import 'features/auth/data/repository/auth_repository_imp.dart';
+import 'features/auth/domain/use_case/log_in_use_case.dart';
+import 'features/auth/presentation/bloc/auth_bloc.dart';
+import 'features/auth/presentation/pages/log_in_page.dart';
 import 'features/product/data/data_sources/product_remote_ds.dart';
 import 'features/product/data/repository/product_repository_imp.dart';
-import 'features/product/domain/repository/product_repository.dart';
 import 'features/product/domain/use_case/product_use_case.dart';
 import 'features/product/presentation/bloc/product_bloc.dart';
 import 'home_page.dart';
-
-
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,46 +21,55 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   final loggedIn = prefs.getBool("loggedIn") ?? false;
 
-  runApp(MyApp(loggedIn));
-}
-
-class MyApp extends StatelessWidget {
-  final bool loggedIn;
-  const MyApp(this.loggedIn, {super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MultiProvider(
+  runApp(
+    MultiRepositoryProvider(
       providers: [
-        // 1️⃣ Provide Dio instance
-        Provider<Dio>(
-          create: (_) => Dio(),
+        RepositoryProvider<SharedPreferences>.value(value: prefs),
+
+        /// DIO
+        RepositoryProvider(create: (_) => Dio()),
+
+        /// AUTH
+        RepositoryProvider(
+          create: (context) => AuthRemoteDatasource(context.read<Dio>()),
+        ),
+        RepositoryProvider(
+          create: (context) => AuthRepositoryImpl(context.read<AuthRemoteDatasource>()),
+        ),
+        RepositoryProvider(
+          create: (context) => LoginUsecase(context.read<AuthRepositoryImpl>()),
         ),
 
-        // 2️⃣ Provide the remote datasource, depends on Dio
-        ProxyProvider<Dio, ProductsRemoteDatasource>(
-          update: (_, dio, __) => ProductsRemoteDatasource(dio),
+        /// PRODUCT
+        RepositoryProvider(
+          create: (context) => ProductsRemoteDatasource(context.read<Dio>()),
         ),
-
-        // 3️⃣ Repository depends on remote datasource
-        ProxyProvider<ProductsRemoteDatasource, ProductsRepository>(
-          update: (_, datasource, __) => ProductsRepositoryImpl(datasource),
+        RepositoryProvider(
+          create: (context) => ProductsRepositoryImpl(context.read<ProductsRemoteDatasource>()),
         ),
-
-        // 4️⃣ Usecase depends on repository
-        ProxyProvider<ProductsRepository, GetProductsUsecase>(
-          update: (_, repository, __) => GetProductsUsecase(repository),
-        ),
-
-        // 5️⃣ Bloc depends on usecase
-        ProxyProvider<GetProductsUsecase, ProductsBloc>(
-          update: (_, usecase, __) => ProductsBloc(usecase),
-          dispose: (_, bloc) => bloc.close(),
+        RepositoryProvider(
+          create: (context) => GetProductsUsecase(context.read<ProductsRepositoryImpl>()),
         ),
       ],
-      child: MaterialApp(
-        home: HomePage(),
+      child: MultiBlocProvider(
+        providers: [
+          BlocProvider<AuthBloc>(
+            create: (context) => AuthBloc(
+              context.read<LoginUsecase>(),
+              context.read<SharedPreferences>(),
+            ),
+          ),
+          BlocProvider<ProductsBloc>(
+            create: (context) => ProductsBloc(context.read<GetProductsUsecase>()),
+          ),
+        ],
+        child: MaterialApp(
+          debugShowCheckedModeBanner: false,
+          title: "Flutter Interview Task",
+          theme: ThemeData(primarySwatch: Colors.deepPurple),
+          home: loggedIn ? const HomePage() : const LoginPage(),
+        ),
       ),
-    );;
-  }
+    ),
+  );
 }
