@@ -1,21 +1,27 @@
 import 'package:dio/dio.dart';
+import '../model/user_model.dart';
 
-class AuthRemoteDataSource {
+class AuthRemoteDatasource {
+
   final Dio dio;
 
-  AuthRemoteDataSource(this.dio);
+  AuthRemoteDatasource(this.dio);
 
-  Future<Map<String, dynamic>> login(
-      String username, String password) async {
+  Future<UserModel> login(
+      String username,
+      String password,
+      ) async {
+
     final response = await dio.post(
-      "/auth/login",
+      "https://dummyjson.com/auth/login",
       data: {
         "username": username,
         "password": password,
-        "expiresInMins": 30
       },
     );
 
-    return response.data;
+    return UserModel.fromJson(response.data);
+
   }
+
 }

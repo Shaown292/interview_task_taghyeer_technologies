@@ -1,49 +1,74 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class AuthBloc extends Bloc<AuthEvent, AuthState> {
+import '../../domain/use_case/log_in_use_case.dart';
+import 'auth_event.dart';
+import 'auth_state.dart';
 
-  final LoginUseCase loginUseCase;
+class AuthBloc extends Bloc<AuthEvent,AuthState>{
+
+  final LoginUsecase loginUsecase;
   final SharedPreferences prefs;
 
-  AuthBloc(this.loginUseCase, this.prefs) : super(AuthInitial()) {
+  AuthBloc(this.loginUsecase,this.prefs) : super(AuthInitial()){
 
-    on<LoginEvent>((event, emit) async {
+    on<LoginRequested>(_onLogin);
 
-      emit(AuthLoading());
+    on<LogoutRequested>(_onLogout);
 
-      try {
+    on<CheckSession>(_onCheckSession);
 
-        await loginUseCase(event.username, event.password);
-
-        await prefs.setBool("loggedIn", true);
-
-        emit(AuthAuthenticated());
-
-      } catch (e) {
-
-        emit(AuthError("Login failed"));
-
-      }
-
-    });
-
-    on<CheckSessionEvent>((event, emit) {
-
-      final logged = prefs.getBool("loggedIn") ?? false;
-
-      if (logged) {
-        emit(AuthAuthenticated());
-      } else {
-        emit(AuthUnauthenticated());
-      }
-
-    });
-
-    on<LogoutEvent>((event, emit) async {
-
-      await prefs.clear();
-      emit(AuthUnauthenticated());
-
-    });
   }
+
+  Future<void> _onLogin(
+      LoginRequested event,
+      Emitter<AuthState> emit
+      ) async {
+
+    emit(AuthLoading());
+
+    try{
+
+      final user = await loginUsecase(
+          event.username,
+          event.password);
+
+      await prefs.setBool("loggedIn", true);
+
+      emit(AuthAuthenticated(user));
+
+    }catch(e){
+
+      emit(AuthError("Login Failed"));
+
+    }
+
+  }
+
+  Future<void> _onLogout(
+      LogoutRequested event,
+      Emitter<AuthState> emit
+      ) async {
+
+    await prefs.clear();
+
+    emit(AuthUnauthenticated());
+
+  }
+
+  void _onCheckSession(
+      CheckSession event,
+      Emitter<AuthState> emit
+      ){
+
+    final loggedIn = prefs.getBool("loggedIn") ?? false;
+
+    if(loggedIn){
+      emit(AuthAuthenticated as AuthState);
+    }else{
+      emit(AuthUnauthenticated());
+    }
+
+  }
+
 }
